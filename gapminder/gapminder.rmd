@@ -1,0 +1,193 @@
+---
+title: "Gapminder_dataset"
+author: "Saahil Shroff"
+date: "2022-12-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(dplyr)
+```
+
+# Data exploration and multiple regression
+
+### What is life expectancy?
+```{r}
+cat("Life expectancy is a statistical estimate of how long someone is predicted to live based on their birth year, present age, and other demographic parameters such as gender. It is used to evaluate and determine a variety of critical policies that have an influence on everyday living, such as setting the State Pension age and focusing health policy activities. The current life expectancy for U.S. in 2022 is 79.05 years, a 0.08% increase from 2021.")
+```
+#### References - 
+#### Period and cohort life expectancy explained: December 2019 - Office for National Statistics. (n.d.). https://www.ons.gov.uk/peoplepopulationandcommunity/birthsdeathsandmarriages/lifeexpectancies/methodologies/periodandcohortlifeexpectancyexplained
+#### U.S. Life Expectancy 1950-2022. (n.d.). MacroTrends. https://www.macrotrends.net/countries/USA/united-states/life-expectancy
+
+### Loading and cleaning the data to remove all cases with missing life expectancy, year and country name.
+```{r cache=TRUE}
+#Loading dataframe 
+df = read.delim("./gapminder.csv.bz2")
+# df
+
+#Sanity checks of the loaded dataframe
+cat("Dimension of the loaded dataframe:", dim(df))
+cat("Any NULLs present in the dataframe?", any(is.na(df)))
+cat("No. of total NULLs present in the dataframe:", sum(is.na(df)))
+cat("No. of NULLs present in each column of the dataframe:")
+colSums(is.na(df))
+
+# Data cleaning
+df1 = df %>% drop_na(lifeExpectancy) # Removing NULLs in lifeExpectancy and time
+df1 = df1[!(df1$name == ""), ] # Removing empty entries from "name" variable
+# df1
+# colSums(is.na(df1))
+cat("Dimensions of the cleaned dataframe:",dim(df1))
+```
+#### Reference - 
+#### Delete rows with blank values in one particular column - https://stackoverflow.com/questions/9126840/delete-rows-with-blank-values-in-one-particular-column
+
+### How many countries do we have in these data?
+```{r}
+country_list = unique(df1$name)
+cat("There are",length(country_list),"in total. They are:")
+sort(country_list)
+```
+
+### What is the first and last year with valid life expectancy data?
+```{r}
+years_list = unique(df1$time)
+cat("First year with valid life expectancy data:",min(years_list),"and last year with valid life expectancy data:",max(years_list))
+```
+### What is the lowest and highest life expectancy values? Which country/year do they correspond to?
+```{r}
+life_expectancy_list = unique(df1$lifeExpectancy)
+```
+#### Lowest life expectancy details:
+```{r}
+min_lifeExpectancy_df = subset(df1, lifeExpectancy == min(life_expectancy_list), select = c(name,time,lifeExpectancy))
+min_lifeExpectancy_df
+```
+#### Highest life expectancy details:
+```{r}
+max_lifeExpectancy_df = subset(df1, lifeExpectancy == max(life_expectancy_list), select = c(name,time,lifeExpectancy))
+max_lifeExpectancy_df
+```
+
+### The shortest life expectancy corresponds to a well-known event. What is the event?
+```{r}
+cat("The Cambodian Genocide, which lasted four years (from 1975 and 1979), was a wave of mass violence that murdered between 1.5 and 3 million people at the hands of the Khmer Rouge, a communist political organization. Following the Cambodian Civil War, the Khmer Rouge seized power in the country. 
+After seizing power, the Khmer Rouge initiated a dramatic overhaul of Cambodian society. This entailed the forcible relocation of city people to the countryside, where they would be compelled to work as farmers, digging canals and tending crops. Mismanagement of the country's economy resulted in food and medication shortages, and untold thousands of people died of sickness and famine. Families were also divided. The Khmer Rouge established work brigades, dividing them into categories based on age and gender. Hundreds of thousands of Cambodians died as a result of this program.")
+```
+#### Reference - 
+#### Cambodia. (n.d.). College of Liberal Arts. https://cla.umn.edu/chgs/holocaust-genocide-education/resource-guides/cambodia
+
+
+### Plotting the life expectancy over time for all countries
+```{r}
+library("ggplot2")
+allCountriesPlot = ggplot(data=df1,aes(x = time,y = lifeExpectancy, group = name)) + geom_line(color = "gray", aes(alpha = 0.2)) #background gray plot
+# allCountriesPlot
+countries = c("China","Cambodia","Korea (Democratic People's Republic of)", "United States of America","United Kingdom of Great Britain and Northern Ireland","Korea, Republic of","Viet Nam","India", "Australia")
+filteredCountryPlot = allCountriesPlot + geom_line(data=df1 %>% filter(name %in% countries), aes(col=name)) # Filtering country based on selection
+filteredCountryPlot
+```
+
+#### Reference - Rapp, A. (n.d.). Albert Rapp - 4 Ways to use colors in ggplot more efficiently. https://albert-rapp.de/posts/ggplot2-tips/07_four_ways_colors_more_efficiently/07_four_ways_colors_more_efficiently.html
+```{r}
+cat("The countries taken for my analyses are - Viet Nam, India, United Kingdom (represented as United Kingdom of Great Britain and Northern Ireland), Australia, and North Korea (represented as Korea, Republic of), Cambodia, China, United States of America (or U.S.A), South Korea (represented as Korea (Democratic People's Republic of)). All in all, I have taken a different mix of countries that are not only from different continents, but also can be identified as First,Second, or Third World Countries.")
+cat("First world countries - U.S.A, U.K., and Australia.") 
+cat("Second world countries - China, South Korea, and Cambodia.") 
+cat("Third world countries - North Korea, India, and Viet Nam.")
+```
+
+#### References - 
+#### Wikipedia contributors. (2022, December 7). List of civil wars. Wikipedia. https://en.wikipedia.org/wiki/List_of_civil_wars
+#### First, Second and Third World. (n.d.). http://www.hartford-hwp.com/archives/10/150.html
+
+
+### Inference on how selected countries behave? 
+```{r}
+cat("Looking at the plot, it seems that life expectancy of 1st world countries w.r.t time steadily increases. These countries have had amongst the highest life expectancy from the beginning (year 1960) and have been able to keep their place in the top. For second world countries, we see some set backs to the life expectancy (a trough in the plot indicates this), but they have soon been able to recover from it and have picked up pace. In case of third world countries, the growth of life expectancy (seen by the steepness of the line) has been highest across the other 2 categories of countries.")
+```
+
+### Creating a fertility rate versus life expectancy plot of all countries with selected countries highlighted (with arrows to mark which way the time goes)
+```{r}
+fertilityAllCountries = ggplot(data=df1,aes(x = fertilityRate,y = lifeExpectancy, group = name)) + geom_path (color = "gray", aes(alpha=0.2)) #background gray plot
+# fertilityAllCountries
+fertilityAllCountries + geom_path(data=df1 %>% filter(name %in% countries), aes(col=name), arrow = arrow(length=unit(0.10,"cm"))) # Filtering country based on selection
+```
+
+#### Reference - 
+#### How to draw a nice arrow in ggplot2. (2016, June 24). Stack Overflow. https://stackoverflow.com/questions/38008863/how-to-draw-a-nice-arrow-in-ggplot2
+
+### Comment on the results. Where is the world going? Where are the highlighted countries going?
+```{r}
+cat("The above plot cements the common real-world observation. In earlier times (1960's - 2000's), the life expectancy was low and people had larger families (indicated by higher fertility rate); one can attribute lower life expectancy to low advancements in the healtcare and medical domain. However, since the 2000's, people have started having nuclear families of 3 or 4 individuals, which is shown by fertility rate going <2.5, and with the new medical equipments and better standard of living, individuals are living for a longer time (indicated by the arrow < 70). This phenomena is observed throughout the world, thus in the future we can hope to see smaller families with higher life expectancy.")
+```
+## Modeling life expectancy
+### Distribution of life expectancy. How does it look like? 
+#### Distribution of life expectancy:
+```{r}
+hist(df1$lifeExpectancy, breaks = 50, xlab = "Life Expectancy")
+```
+
+#### Distribution of log of life expectancy:
+```{r}
+hist(log(df1$lifeExpectancy), breaks= 50,xlab = "Log of Life Expectancy")
+```
+```{r}
+cat("Looking at the 1st plot - Distribution of life expectancy, I thought that log transformation would be required. While the plot is normally distributed, it was right-skewed; hence, I thought doing a log-transformation will create the plot normally distributed in the centre. However, when I checked the distribution of the log-transformed life expectancy variable, my assumption was wrong; the plot was still right-skewed. All in all, there is no difference between the 2 plots in terms of skewness. As a result, I am NOT taking a log-transformation and going with the original distribution.")
+```
+
+### Creating a linear model between life expectancy with just time. (Using year − 2000 instead of just year for time)
+```{r}
+year2000 = df1 %>% mutate(time_ref_2000 = (time-2000))
+head(year2000)
+lm_life_expectancy_ref_2000 = lm(lifeExpectancy ~ time_ref_2000, data = year2000)
+summary(lm_life_expectancy_ref_2000)
+```
+
+```{r}
+cat("The process of doing (year-2000) is called mean-centering. It is done so that it changes the interpretation of the intercept in a very helpful way. For instance, if we do not scale/mean-centre the year, the life expectancy will come out as negative, which cannot be the case. Thus, it is a required step for furhter model interpretation.")
+```
+
+#### Reference - Lohninger, H. (n.d.). Scaling of Data. http://www.statistics4u.com/fundstat_eng/cc_scaling.html
+
+### Interpret the results of the model (both b0 and b1).
+```{r}
+cat(" b0 indicates the life expectancy at year 2000 (or time = 0), while b1 indicates that with as time ahead moves by 1year, the life expectancy in the world increases by 0.3087 years")
+```
+### Estimating the life expectancy through multiple regression model (adding continent)
+```{r}
+lm_life_expectancy_ref_2000_region = lm(lifeExpectancy ~ time_ref_2000 + region, data = year2000)
+summary(lm_life_expectancy_ref_2000_region)
+```
+### Interpreting the model and evaulating this model against the previous model.
+```{r}
+cat("All the independent variables - time_ref_200 and region - are statistically significant to predict the life expectancy. It can be said since each of the factors are <2e-16, which is outside the 95% confidence interval.
+The intercept represents the African-region and the time trend is for 80 years (1960 - 2020), centered at 2000.
+This model has a better R^2 value as compared to the previous model, which suggests that this is a stronger and a more reliable model as compare to the previous one. Additionally, the difference between R^2 and adjusted R^2 is minimal, which means each independent variables actually have an effect on the performance of the model.")
+```
+
+### Adding two additional variables to the model: log of GDP per capita, and fertility rate.
+```{r}
+lm_life_expectancy_ref_2000_region_gdp_fertility = lm(lifeExpectancy ~ time_ref_2000 + region + log(GDP_PC) + fertilityRate, data = year2000)
+summary(lm_life_expectancy_ref_2000_region_gdp_fertility)
+```
+
+```{r}
+cat("The intercept represents the African-region and the time trend is for 80 years (1960 - 2020), centered at 2000. The new parameters - GDP_PC and fertilityRate - are both statistically significant as well as their p-value is <2e-16 (<0.05), which means that it is outside the 95% confidence interval and plays a role in prediciting the dependent variable.
+This model has a better R^2 value as compared to the all the previous models, which suggests that this is a stronger and a more reliable model as compare to both the previous ones. Additionally, the difference between R^2 and adjusted R^2 is minimal, which means each independent variables actually have an effect on the performance of the model.")
+```
+
+### Additional variables made the ranking of continents to look different than the previous models.
+```{r}
+cat("Europe was the leading region in Q5, whereas America is the leading region now when we introduce other socio-economic variables such as GDP & fertility rate. The major cause of the order of regions changing as we keep adding additional variables is because every new beta value has an influence on the cohesiveness with which all the other factors are impacting the dependent variable.
+Furthermore, studies have shown that higher values of GDP per capita and lower values of infant mortality levels lead to higher life expectancy at birth suggesting that longevity of people in these five countries is increasing, which is cemented through the above model.")
+```
+#### Reference - Miladinov, G. (2020, January 10). Socioeconomic development and life expectancy relationship: evidence from the EU accession candidate countries - Genus. SpringerOpen. https://genus.springeropen.com/articles/10.1186/s41118-019-0071-0
+
+
+### Which continent has the highest and lowest life expectancy?
+```{r}
+cat("Looking at the latest model, America has the highest life expectancy, while Europe has the lowest life expectancy.")
+```
