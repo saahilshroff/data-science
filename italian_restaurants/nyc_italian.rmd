@@ -1,0 +1,97 @@
+---
+title: "NYC_Italian_restaurant"
+author: "Saahil Shroff"
+date: "2022-12-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(dplyr)
+```
+
+
+# Find Cheap Restaurants
+## Loading the data and performing basic sanity checks.
+```{r}
+load_nyc_restaurants_df = read.delim("./nyc-italian-cheap.csv.bz2")
+head(load_nyc_restaurants_df)
+
+cat("Dimensions on the loaded dataframe:",dim(load_nyc_restaurants_df))
+cat("Are there any NULLs present in the loaded data frame?", any(is.na(load_nyc_restaurants_df)))
+```
+
+```{r}
+cat("Logistic regression is suitable for predicting if a restaurant is cheap or not. It is because logistic regression is used for classification tasks since it is a simple and effective way to predict a binary outcome. The model uses logistic function to model the relationship between a binary dependent variable (cheap variable in this case) and one or more independent variables (such as decor, service) to predict the probability that an instance belongs to a certain class. Linear regression, on the other hand, is used for predicting continuous values, and would have been suitable for predictiong price of a meal at a restaurant.")
+```
+
+## Building the model - estimating the model and interpreting the results.
+
+#### Factoring food,decor,and service using the following categories:
+#### 0-4: 0; 
+#### 5-9: 1;  
+#### 10-14: 2; 
+#### 15-19: 3; 
+#### 20-24: 4; 
+#### 25 =<: 5.
+```{r}
+split_food = cut(load_nyc_restaurants_df$Food, 
+                breaks = c(0,5,10,15,20,25,Inf),
+                labels=c("0","1", "2", "3", "4", "5"))
+split_decor = cut(load_nyc_restaurants_df$Decor, 
+                breaks = c(0,5,10,15,20,25,Inf),
+                labels=c("0","1", "2", "3", "4", "5"))
+split_service = cut(load_nyc_restaurants_df$Service, 
+                breaks = c(0,5,10,15,20,25,Inf),
+                labels=c("0","1", "2", "3", "4", "5"))
+
+nyc_restaurants = data.frame(load_nyc_restaurants_df,split_food,split_decor,split_service)
+head(nyc_restaurants)
+```
+#### Creating a logistic model:
+```{r}
+restaurant_model = glm(Cheap ~ factor(split_food) + factor(split_decor) + factor(split_service) + factor(East), data=nyc_restaurants, family="binomial")
+summary(restaurant_model)
+```
+```{r}
+cat("My assumption was that all the variables - Food, Decor, Service, and East will play a role to determine if a restaurant is cheap or not. In my experience, if the food, decor, service are top-class and it is situated in a posh locality, there are high chances for the restaurant to be expensive. However, looking at the model, only top-class food (4/5) is statistically significant towards prediciting if a restaurant is cheap or not, which goes against my common observation and experience.")
+```
+
+## Adding two new places with the following scores and locations to make predictions
+```{r}
+# Creating dataframe on which prediction has to be made 
+Restaurant = c("Assagio Ristorante","Altura")
+Food = c(23,18)
+Decor = c(17,15)
+Service = c(22,24)
+East = c(0,1)
+to_predict = data.frame(Restaurant,Food,Decor,Service,East)
+to_predict
+```
+#### Getting the dataframe ready for prediction:
+```{r}
+split_food = cut(to_predict$Food, 
+                breaks = c(0,5,10,15,20,25,Inf),
+                labels=c("0","1", "2", "3", "4", "5"))
+split_decor = cut(to_predict$Decor, 
+                breaks = c(0,5,10,15,20,25,Inf),
+                labels=c("0","1", "2", "3", "4", "5"))
+split_service = cut(to_predict$Service, 
+                breaks = c(0,5,10,15,20,25,Inf),
+                labels=c("0","1", "2", "3", "4", "5"))
+# Adding the classification to the "prediction" data frame
+to_predict = data.frame(to_predict,split_food,split_decor,split_service)
+to_predict
+
+library(caret)
+cheap_restaurant_prediction = predict(restaurant_model,to_predict)
+# cheap_restaurant_prediction
+normalized_prediction = ifelse(cheap_restaurant_prediction>=0.5,1,0) # grouping together for classification
+final_prediction = cbind(to_predict,normalized_prediction)
+```
+#### Prediction and Inference:
+```{r}
+final_prediction %>% select(Restaurant,normalized_prediction)
+cat("Thus, according to the logistic-regression model's predicition, Altura is a cheap Italian restaurant, while Assagio Ristorante is an expensive Italian restaurant.")
+```
