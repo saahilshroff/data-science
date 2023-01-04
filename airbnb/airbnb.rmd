@@ -1,0 +1,154 @@
+---
+title: "AirBnB"
+subtitle: "Linear regression"
+author: "Saahil Shroff"
+date: "2022-11-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, error = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+## Predicting AirBnB Price
+### Loading the data and basic sanity checks.
+```{r}
+# Loading data
+airbnb_df = read.csv("airbnb-vancouver-bc-listings.csv.bz2",sep=",")
+# Sanity Checks
+cat("There are",nrow(airbnb_df),"rows and",ncol(airbnb_df),"columns.")
+
+cat("Any NULLS present?",any(is.na(airbnb_df)))
+cat("Total number of NULLS:", sum(is.na(airbnb_df)))
+```
+
+### Data cleaning
+```{r}
+# Taking only variables that we need
+airbnb = airbnb_df %>% select(name,price,bedrooms,beds,room_type,accommodates)
+cat("Selected columns are:",colnames(airbnb))
+cat("Dimension of the dataframe with selected columns:",dim(airbnb))
+
+# Converting price value 
+airbnb$price = airbnb$price %>% gsub("$","",.,fixed = TRUE) %>% gsub(",","",.,fixed = TRUE)
+airbnb$price = as.numeric(airbnb$price) 
+head(airbnb)
+```
+#### NULL checks
+```{r}
+cat("Number of NULLs in price:",sum(is.na(airbnb$price)))
+cat("Number of NULLs in bedrooms:",sum(is.na(airbnb$bedrooms)))
+cat("Number of NULLs in beds:",sum(is.na(airbnb$beds)))
+```
+
+#### Dropping NULLs from beds-variable & cleaning the bedrooms variable:
+```{r}
+airbnb = airbnb %>% drop_na(beds)
+cat("Dimension after dropping NULLS from bed-variable:",dim(airbnb))
+
+airbnb$bedrooms[is.na(airbnb$bedrooms)] = airbnb$beds
+head(airbnb)
+```
+#### Here, I have substituted the value of beds into the bedrooms-variable wherever it was NULL. I did so because when I went through the dataset before making this modification, it seemed like the beds and bedrooms were usually the same in most cases. 
+
+### Analyzing the distribution of price.
+
+```{r}
+hist(airbnb$price, breaks=100,main = "Histogram of Price")
+```
+
+#### The above plot looks very similar to the Pareto distribution. 
+
+```{r}
+hist(log(airbnb$price), breaks=100,main = "Histogram of log of Price")
+```
+
+#### Taking the log of the first curve, we can see that the plot resembles a normal-distribution.
+
+### Converting the number of bedrooms into another variable with a limited number of categories only, such as 0, 1, 2, 3+ to use these categories in the models below
+
+#### Adding a new variable - bedrooms_sel:
+```{r}
+bedrooms_sel = cut(airbnb$bedrooms, 
+                breaks = c(0,1,2,3,Inf),
+                labels=c("0", "1", "2", "3+")) 
+airbnb_final = data.frame(airbnb,bedrooms_sel)
+head(airbnb_final)
+```
+
+### Estimating a linear regression model where you explain log price with number of BR-s (the BR categories done above).
+
+#### Modelling regression model of price & BRs
+```{r}
+bedroom_model = lm(price ~ bedrooms_sel, airbnb_final)
+summary(bedroom_model)
+```
+#### Modelling regression model of log(price) & BRs
+```{r}
+bedroom_model_log = lm(log(price) ~ bedrooms_sel, airbnb_final)
+summary(bedroom_model_log)
+```
+
+#### Looking at both the models, we can see that the model on log(price) has higher R-squared value than the model that just uses price. This clearly shows that the log(price) vs bedrooms are more interdependent as compared to price vs bedrooms.
+
+### Values that these two variables (room type and accommodates) take
+#### Room type:
+```{r}
+table(airbnb_final$room_type)
+```
+#### Accomodates:
+```{r}
+table(airbnb_final$accommodates)
+```
+
+### Converting the room type into 3 categories: Entire home/apt, Private room, Other; and recode accommodates into 3 categories: “1”, “2”, “3 or more”.
+```{r}
+types_of_room = airbnb_final$room_type
+# types_of_room
+types_of_room[airbnb_final$room_type %in% c("Hotel room", "Shared room")] = "Other"
+table(types_of_room)
+
+new_accomodates = cut(airbnb_final$accommodates,
+                breaks = c(0,1,2,3,Inf),
+                labels=c("1", "2", "3", "more")) 
+airbnb_final = data.frame(airbnb_final, types_of_room, new_accomodates)
+head(airbnb_final)
+```
+
+### Adding new variables (new_accomodates + types_of_room) to the previous prediction model and interpreting the model. 
+
+```{r}
+amend_model = lm(log(price) ~ bedrooms_sel + new_accomodates + types_of_room, airbnb_final)
+summary(amend_model)
+```
+
+#### For each category, a reference is set and other categorical data is computed with respect to it. For e.g.: In variable "bedrooms_sel" - bedrooms_sel1, bedrooms_sel2, and bedrooms_sel3+ are calculated in reference to bedrooms_sel0. Additionally, this model has better R-sqaured value as compared to the previous model. In my view, it is due to the extra variables that we have taken to predict the price; these extra factors influence the price of the airbnb as compared to just # of bedrooms, and aids us in predicting the price of the airbnb unit.
+
+#### types_of_roomOther is not statiscally significant, i.e., this categorical data has no influence in predicting the price of the airbnb. It may be because the data present in this category is too small as compared to other categories in the same variable to make an effect on the price of the airbnb unit.
+
+### Using the model above to predict (log) price for each listing in the data
+```{r}
+predictor = predict(amend_model, newdata = airbnb_final)
+summary(predictor)
+```
+
+### Root-mean-squared-error (RMSE) of the predictions.
+```{r}
+library(Metrics)
+airbnb_final = airbnb_final %>% mutate(log_price = log(price))
+rmse(airbnb_final$log_price, predictor)
+```
+
+### Using the model to predict log price for a 2-bedroom apartment that accommodates 4 (i.e., a full 2BR apartment).
+```{r}
+bed2_acc4 = data.frame(bedrooms_sel=c("2"), new_accomodates=c("more"), types_of_room="Entire home/apt")
+# bed2_acc4
+predictor_bed2_acc4 = predict(amend_model,bed2_acc4)
+cat("Log price of a 2-Bedroom apartment that accomodates 4:",predictor_bed2_acc4)
+```
